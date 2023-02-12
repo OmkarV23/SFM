@@ -11,7 +11,7 @@ def projection_mat(K,Rot,trans):
     return proj_mat
 
 def Essential_mat(K,F):
-    E = K.T @ F @ K
+    E = K.T @ (F @ K)
     u,_,vt = cp.linalg.svd(E)
     E = u @ cp.diag([1,1,0]) @ vt
     return E

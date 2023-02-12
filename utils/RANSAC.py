@@ -4,7 +4,7 @@ import cv2
 from utils.FundamentalMatrix import F
 
 
-number_of_images = 4
+number_of_images = 2
 matching_file = '/workspace/omkar_projects/WPI_CV/SFM/P3Data/matching1.txt'
 
 class RANSAC():
@@ -24,8 +24,8 @@ class RANSAC():
             if number_of_images in img_id:
                 self.matching_features['RGB values'].append((int(l[1]),int(l[2]),int(l[3])))
                 self.matching_features['u1'].append((float(l[4]),float(l[5]),1))
-                self.matching_features['u2'].append((float(l[l.index(str(number_of_images))+1]),
-                                                float(l[l.index(str(number_of_images))+2]),1))
+                self.matching_features['u2'].append((float(l[l[1:].index(str(number_of_images))+2]),
+                                                float(l[l[1:].index(str(number_of_images))+3]),1))
         best_inliers = {'RGB values':[],'u1':[],'u2':[]}
         for i in range(self.iteration_limit):
             idxs = random.sample(range(0, len(self.matching_features['RGB values'])), self.N)

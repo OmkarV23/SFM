@@ -1,5 +1,6 @@
 import cupy as cp
 import sys
+import cv2
 
 
 def scale_mat(scales):
@@ -26,39 +27,25 @@ def translation_mat(mean):
     return trans1, trans2
 
 
+def normalize(points):
+    pts_mean = cp.mean(points, axis=0)
+    mean_correction = points-pts_mean
+    scale = (len(points) / cp.mean((mean_correction[:,0])**2 + (mean_correction[:,1])**2))**(0.5)
+    scale_mat = cp.array([[scale.get(),0,0],
+                        [0,scale.get(),0],
+                        [0,0,1]])
+    translation_mat = cp.array([[1,0,-pts_mean[0].get()],[0,1,-pts_mean[1].get()],[0,0,1]])
+    transformation_mat = cp.matmul(scale_mat, translation_mat)
+    return (transformation_mat @ points.T).T, transformation_mat
+
 def F(rgb_lst,u1_lst,u2_lst,threshold=0.003):
-    
-    # Concenate the points from image 1 and image 2 for easy operations and leverare cupy/numpy functions.
-    # Concenate across the rows.
-    points_1_2 = cp.concatenate([cp.array(u1_lst),cp.array(u2_lst)], axis=1)
-    
-    # Take the mean across the columns to get a 1X6 vector [x1_mean, y1_mean, 1, x2_mean, y2_mean, 1]
-    mean_1_2 = cp.mean(points_1_2, axis=0   )[None,:]
 
-    # Point correction with (0,0) at the centroid of the image. Get x1_dash,y1_dash,x_2dash,y_2dash. 
-    corrected_pts = points_1_2 - mean_1_2
-
-    # calculate scales using L2 norm
-    scale_1 = len(u1_lst) / cp.sum(((corrected_pts[0])**2 + (corrected_pts[1])**2)**(0.5))
-    scale_2 = len(u2_lst) / cp.sum(((corrected_pts[3])**2 + (corrected_pts[4])**2)**(0.5))
-
-    # refer 'scale_mat' and 'translation_mat' for the explanation
-    scale1, scale2 = scale_mat([scale_1, scale_2])
-
-    translation1, translation2 = translation_mat(mean_1_2.squeeze(0))
-
-    # get transformation matrix using scale and translation
-    transformation1, transformation2 = cp.matmul(scale1,translation1), cp.matmul(scale2,translation2)
-
-    # multiply with original points to get the transformed points
-    u1_normalized = (transformation1 @ points_1_2.T[:3]).T
-    u2_normalized = (transformation2 @ points_1_2.T[3:]).T
+    u1_normalized, transformation_mat1 = normalize(cp.array(u1_lst))
+    u2_normalized, transformation_mat2 = normalize(cp.array(u2_lst))
 
     mat = []
     for u1,u2 in zip(u1_normalized,u2_normalized):
-        u1 = cp.array(u1)
-        u2 = cp.array(u2)
-        eq = cp.concatenate([cp.dot(u1,u2[0]), cp.dot(u1,u2[1]), cp.dot(u1,u2[2])])
+        eq = cp.concatenate([cp.dot(u1,u2[0]), cp.dot(u1,u2[1]), cp.dot(u1,u2[2])],axis=0)
         mat.append(eq)
     mat = cp.array(mat)
     _,s,vT = cp.linalg.svd(mat, full_matrices=True)
@@ -67,7 +54,7 @@ def F(rgb_lst,u1_lst,u2_lst,threshold=0.003):
     F_init = vT.T[:,-1].reshape(3,3)
 
     # Denormalize F
-    F_denorm = transformation2.T @ F_init @ transformation1
+    F_denorm = transformation_mat2.T @ F_init @ transformation_mat1
 
     # SVD of denormalized fundamental matrix
     u_f,s_f,vt_f = cp.linalg.svd(F_denorm)
